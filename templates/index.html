@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MuseTalk 流式视频输出</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            padding: 30px;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+        
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+        }
+        
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+        }
+        
+        .section h2 {
+            color: #667eea;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #555;
+            font-weight: 500;
+        }
+        
+        input[type="text"], input[type="file"] {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+        
+        input[type="text"]:focus, input[type="file"]:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: transform 0.2s, box-shadow 0.2s;
+            margin-right: 10px;
+            margin-top: 10px;
+        }
+        
+        button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        button:active:not(:disabled) {
+            transform: translateY(0);
+        }
+        
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .video-container {
+            width: 100%;
+            max-width: 800px;
+            margin: 20px auto;
+            background: #000;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+        
+        .video-stream {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+        
+        .status {
+            padding: 10px;
+            border-radius: 5px;
+            margin-top: 10px;
+            font-weight: 500;
+        }
+        
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        
+        .avatar-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        
+        .avatar-item {
+            padding: 10px 15px;
+            background: white;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .avatar-item:hover {
+            border-color: #667eea;
+            background: #f0f4ff;
+        }
+        
+        .avatar-item.active {
+            border-color: #667eea;
+            background: #667eea;
+            color: white;
+        }
+        
+        .loading {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 8px;
+            vertical-align: middle;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div class="container">
+            <h1>🎭 MuseTalk 流式视频输出</h1>
+            <p class="subtitle">实时虚拟人视频生成系统</p>
+            
+            <!-- Avatar 管理区域 -->
+            <div class="section">
+                <h2>1. 创建 Avatar</h2>
+                <div class="form-group">
+                    <label>Avatar ID:</label>
+                    <input 
+                        type="text" 
+                        v-model="formData.avatarId" 
+                        placeholder="例如: avatar1"
+                    >
+                </div>
+                <div class="form-group">
+                    <label>视频文件路径:</label>
+                    <input 
+                        type="text" 
+                        v-model="formData.videoPath" 
+                        placeholder="例如: data/video/yongen.mp4"
+                    >
+                </div>
+                <button 
+                    @click="createAvatar" 
+                    :disabled="loading.createAvatar"
+                >
+                    <span v-if="loading.createAvatar" class="loading"></span>
+                    {{ loading.createAvatar ? '创建中...' : '创建 Avatar' }}
+                </button>
+                <div v-if="status.createAvatar" :class="['status', status.createAvatar.type]">
+                    {{ status.createAvatar.message }}
+                </div>
+            </div>
+            
+            <!-- Avatar 列表 -->
+            <div class="section">
+                <h2>2. 已创建的 Avatar</h2>
+                <button 
+                    @click="listAvatars" 
+                    :disabled="loading.listAvatars"
+                >
+                    <span v-if="loading.listAvatars" class="loading"></span>
+                    {{ loading.listAvatars ? '加载中...' : '刷新列表' }}
+                </button>
+                <div class="avatar-list">
+                    <div 
+                        v-if="avatars.length === 0 && !loading.listAvatars"
+                        style="color: #666; padding: 10px;"
+                    >
+                        暂无 Avatar
+                    </div>
+                    <div
+                        v-for="avatar in avatars"
+                        :key="avatar.avatar_id"
+                        class="avatar-item"
+                        :class="{ active: selectedAvatarId === avatar.avatar_id }"
+                        @click="selectAvatar(avatar.avatar_id)"
+                    >
+                        {{ avatar.avatar_id }} ({{ avatar.status }})
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 推理控制区域 -->
+            <div class="section">
+                <h2>3. 开始推理</h2>
+                <div class="form-group">
+                    <label>选择 Avatar:</label>
+                    <input 
+                        type="text" 
+                        v-model="selectedAvatarId" 
+                        placeholder="输入 Avatar ID"
+                    >
+                </div>
+                <div class="form-group">
+                    <label>音频文件路径:</label>
+                    <input 
+                        type="text" 
+                        v-model="formData.audioPath" 
+                        placeholder="例如: data/audio/yongen.wav"
+                    >
+                </div>
+                <button 
+                    @click="startInference" 
+                    :disabled="loading.startInference || !currentSessionId === null"
+                >
+                    <span v-if="loading.startInference" class="loading"></span>
+                    {{ loading.startInference ? '启动中...' : '开始生成' }}
+                </button>
+                <button 
+                    @click="stopInference" 
+                    :disabled="!currentSessionId"
+                >
+                    停止生成
+                </button>
+                <div v-if="status.inference" :class="['status', status.inference.type]">
+                    {{ status.inference.message }}
+                </div>
+            </div>
+            
+            <!-- 视频流显示区域 -->
+            <div class="section">
+                <h2>4. 实时视频流</h2>
+                <div class="video-container">
+                    <img 
+                        v-if="videoStreamUrl"
+                        :src="videoStreamUrl" 
+                        class="video-stream"
+                        alt="视频流将在这里显示"
+                        @load="onVideoStreamLoad"
+                        @error="onVideoStreamError"
+                    >
+                    <div v-else style="padding: 40px; text-align: center; color: #999;">
+                        等待视频流...
+                    </div>
+                </div>
+                <div v-if="status.stream" :class="['status', status.stream.type]">
+                    {{ status.stream.message }}
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const { createApp } = Vue;
+        
+        createApp({
+            data() {
+                return {
+                    API_BASE: 'http://localhost:5000/api',
+                    formData: {
+                        avatarId: 'avatar1',
+                        videoPath: 'data/video/yongen.mp4',
+                        audioPath: 'data/audio/yongen.wav'
+                    },
+                    selectedAvatarId: 'avatar1',
+                    avatars: [],
+                    currentSessionId: null,
+                    videoStreamUrl: '',
+                    loading: {
+                        createAvatar: false,
+                        listAvatars: false,
+                        startInference: false
+                    },
+                    status: {
+                        createAvatar: null,
+                        inference: null,
+                        stream: null
+                    }
+                };
+            },
+            mounted() {
+                // 页面加载时获取 Avatar 列表
+                this.listAvatars();
+            },
+            methods: {
+                // 创建 Avatar
+                async createAvatar() {
+                    if (!this.formData.avatarId || !this.formData.videoPath) {
+                        this.status.createAvatar = {
+                            type: 'error',
+                            message: '请填写 Avatar ID 和视频路径'
+                        };
+                        return;
+                    }
+                    
+                    this.loading.createAvatar = true;
+                    this.status.createAvatar = {
+                        type: 'info',
+                        message: '正在创建 Avatar...'
+                    };
+                    
+                    try {
+                        const response = await fetch(`${this.API_BASE}/avatar/create`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                avatar_id: this.formData.avatarId,
+                                video_path: this.formData.videoPath,
+                                bbox_shift: 0,
+                                batch_size: 20
+                            })
+                        });
+                        
+                        const data = await response.json();
+                        
+                        if (response.ok) {
+                            this.status.createAvatar = {
+                                type: 'success',
+                                message: data.message
+                            };
+                            // 自动刷新列表
+                            await this.listAvatars();
+                            // 自动选择新创建的 Avatar
+                            this.selectedAvatarId = this.formData.avatarId;
+                        } else {
+                            this.status.createAvatar = {
+                                type: 'error',
+                                message: `错误: ${data.detail || data.error || '创建失败'}`
+                            };
+                        }
+                    } catch (error) {
+                        this.status.createAvatar = {
+                            type: 'error',
+                            message: `请求失败: ${error.message}`
+                        };
+                    } finally {
+                        this.loading.createAvatar = false;
+                    }
+                },
+                
+                // 列出所有 Avatar
+                async listAvatars() {
+                    this.loading.listAvatars = true;
+                    
+                    try {
+                        const response = await fetch(`${this.API_BASE}/avatar/list`);
+                        const data = await response.json();
+                        
+                        if (response.ok) {
+                            this.avatars = data.avatars || [];
+                        } else {
+                            console.error('获取 Avatar 列表失败:', data);
+                        }
+                    } catch (error) {
+                        console.error('请求失败:', error);
+                    } finally {
+                        this.loading.listAvatars = false;
+                    }
+                },
+                
+                // 选择 Avatar
+                selectAvatar(avatarId) {
+                    this.selectedAvatarId = avatarId;
+                },
+                
+                // 开始推理
+                async startInference() {
+                    if (!this.selectedAvatarId || !this.formData.audioPath) {
+                        this.status.inference = {
+                            type: 'error',
+                            message: '请填写 Avatar ID 和音频路径'
+                        };
+                        return;
+                    }
+                    
+                    this.loading.startInference = true;
+                    this.status.inference = {
+                        type: 'info',
+                        message: '正在启动推理...'
+                    };
+                    
+                    try {
+                        const response = await fetch(`${this.API_BASE}/inference/start`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                avatar_id: this.selectedAvatarId,
+                                audio_path: this.formData.audioPath,
+                                fps: 25,
+                                skip_save_images: true
+                            })
+                        });
+                        
+                        const data = await response.json();
+                        
+                        if (response.ok) {
+                            this.currentSessionId = data.session_id;
+                            this.status.inference = {
+                                type: 'success',
+                                message: `推理已启动！Session ID: ${this.currentSessionId}`
+                            };
+                            
+                            // 开始显示视频流
+                            this.startVideoStream(data.session_id);
+                        } else {
+                            this.status.inference = {
+                                type: 'error',
+                                message: `错误: ${data.detail || data.error || '启动失败'}`
+                            };
+                        }
+                    } catch (error) {
+                        this.status.inference = {
+                            type: 'error',
+                            message: `请求失败: ${error.message}`
+                        };
+                    } finally {
+                        this.loading.startInference = false;
+                    }
+                },
+                
+                // 停止推理
+                async stopInference() {
+                    if (!this.currentSessionId) {
+                        return;
+                    }
+                    
+                    try {
+                        await fetch(`${this.API_BASE}/inference/stop/${this.currentSessionId}`, {
+                            method: 'POST'
+                        });
+                        
+                        this.currentSessionId = null;
+                        this.videoStreamUrl = '';
+                        this.status.stream = {
+                            type: 'info',
+                            message: '视频流已停止'
+                        };
+                    } catch (error) {
+                        console.error('停止推理失败:', error);
+                    }
+                },
+                
+                // 开始视频流
+                startVideoStream(sessionId) {
+                    this.videoStreamUrl = `${this.API_BASE}/stream/${sessionId}?t=${Date.now()}`;
+                    this.status.stream = {
+                        type: 'info',
+                        message: '正在连接视频流...'
+                    };
+                },
+                
+                // 视频流加载成功
+                onVideoStreamLoad() {
+                    this.status.stream = {
+                        type: 'success',
+                        message: '视频流连接成功'
+                    };
+                },
+                
+                // 视频流加载失败
+                onVideoStreamError() {
+                    this.status.stream = {
+                        type: 'error',
+                        message: '视频流连接失败，请检查服务器状态'
+                    };
+                }
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>

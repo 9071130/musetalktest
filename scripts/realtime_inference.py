@@ -209,7 +209,7 @@ class Avatar:
 
         torch.save(self.input_latent_list_cycle, os.path.join(self.latents_out_path))
 
-    def process_frames(self, res_frame_queue, video_len, skip_save_images):
+    def process_frames(self, res_frame_queue, video_len, skip_save_images, frame_callback=None):
         print(video_len)
         while True:
             if self.idx >= video_len - 1:
@@ -233,10 +233,15 @@ class Avatar:
 
             if skip_save_images is False:
                 cv2.imwrite(f"{self.avatar_path}/tmp/{str(self.idx).zfill(8)}.png", combine_frame)
+            
+            # 流式输出回调：每生成一帧就立即回调
+            if frame_callback is not None:
+                frame_callback(combine_frame, self.idx)
+            
             self.idx = self.idx + 1
 
     @torch.no_grad()
-    def inference(self, audio_path, out_vid_name, fps, skip_save_images):
+    def inference(self, audio_path, out_vid_name, fps, skip_save_images, frame_callback=None):
         os.makedirs(self.avatar_path + '/tmp', exist_ok=True)
         print("start inference")
         ############################################## extract audio feature ##############################################
@@ -259,7 +264,7 @@ class Avatar:
         res_frame_queue = queue.Queue()
         self.idx = 0
         # Create a sub-thread and start it
-        process_thread = threading.Thread(target=self.process_frames, args=(res_frame_queue, video_num, skip_save_images))
+        process_thread = threading.Thread(target=self.process_frames, args=(res_frame_queue, video_num, skip_save_images, frame_callback))
         process_thread.start()
 
         gen = datagen(whisper_chunks,
